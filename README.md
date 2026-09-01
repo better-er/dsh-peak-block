@@ -1,4 +1,4 @@
-# dsh·梁文峰时间拦截插件
+# dsh·禁止梁文峰
 
 在 DeepSeek 官方高峰时段拦截官方 provider 请求，保障安心使用梁文谷。
 
@@ -33,7 +33,7 @@ dsh plugin --profile web remove dsh-peak-block
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | 总开关 |
-| `officialProviders` | 未设（只认 `deepseek-official`） | 视为「官方」的 provider 精确名单，不设用默认判定 |
+| `officialProviders` | 未设，只认 `deepseek-official` | 视为「官方」的 provider 精确名单，不设用默认判定 |
 | `targetProvider` | 空 | 拦截后切到的目标 provider；留空 = 阻止并提示 |
 | `peakWindow` | 工作日 9–12、14–18，周末谷 | 峰谷时段窗口，可整体或局部覆盖 |
 
@@ -52,7 +52,7 @@ plugins:
 
 ## 边界
 
-- 只拦对话模型请求：`agent/request` 覆盖 agent loop 的正常对话；compaction 等走 `ctx.llm.stream()` 的路径不拦。
+- 只拦对话模型请求：`agent/request` 覆盖 agent loop 的正常对话；compaction 等走 `ctx.llm.stream` 的路径不拦。
 - `targetProvider` 必须是 DSH 已注册适配器路由，否则切换后以 `NO_ADAPTER` 失败。
 - `days` 用 JS `getUTCDay` 序号，1..5 为周一..周五；时区判定纯 UTC+8 数学换算，与系统时区无关。
 

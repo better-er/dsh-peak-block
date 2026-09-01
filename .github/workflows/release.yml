@@ -1,10 +1,10 @@
 name: Release
 
-# 推送形如 vX.Y.Z（如 v0.1.0）的 tag 时自动发版：
+# 推送形如 vX.Y.Z，如 v0.1.0，的 tag 时自动发版：
 #   凭 tag 号更新 package.json 版本并提交回 main → 语法/冒烟/产物校验
 #   → 发布 npm → 生成 GitHub Release draft。人只需打一个 tag，其余自动衔接。
 # 注意：npm 发布依赖 npmjs 侧开启的 Trusted Publishing
-# （npmjs.com → 本包 → Enable trusted publishing → 绑本仓库 GitHub Actions），
+# npmjs.com → 本包 → Enable trusted publishing → 绑本仓库 GitHub Actions，
 # 无需配置 NPM_TOKEN；未开启时发布步骤会失败。
 on:
   push:

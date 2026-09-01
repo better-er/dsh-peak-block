@@ -1,5 +1,5 @@
 # dsh-peak-block bundle patch: inserts this plugin into a profile's layer stack.
-# Applied when a profile lists this bundle (or wired by dev_install_package).
+# Applied when a profile lists this bundle or wired by dev_install_package.
 # targetProvider 留空即「未配置拦截目标」，梁文峰时间拦截到时走「阻止并提示」。
 - insert:
     - id: dsh-peak-block

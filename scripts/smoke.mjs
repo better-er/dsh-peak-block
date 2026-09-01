@@ -11,8 +11,8 @@ function check(name, actual, expected) {
   console.log(`${ok ? 'PASS' : 'FAIL'} ${name}${ok ? '' : ` -> got ${JSON.stringify(actual)}, want ${JSON.stringify(expected)}`}`)
 }
 
-// 参照 smoke-cachebilling：构造北京时刻（UTC+8 本地）的 epoch ms。
-// beijing(y,m,d,h) = 该北京时刻对应的 Date.UTC 毫秒。
+// 参照 smoke-cachebilling：构造北京时刻 UTC+8 本地 的 epoch ms。
+// beijing y,m,d,h = 该北京时刻对应的 Date.UTC 毫秒。
 function beijing(y, m, d, h = 0, min = 0) {
   const month = m - 1 // JS 月份 0 起
   return Date.UTC(y, month, d, h - 8, min, 0, 0)
@@ -21,10 +21,10 @@ function beijing(y, m, d, h = 0, min = 0) {
 // —— 梁文峰时间判定 ——
 check('周一09点为峰', isPeakBeijing(beijing(2026, 7, 13, 9)), true)
 check('周一11点为峰', isPeakBeijing(beijing(2026, 7, 13, 11)), true)
-check('周一12点为谷(不含12)', isPeakBeijing(beijing(2026, 7, 13, 12)), false)
+check('周一12点为谷，不含12', isPeakBeijing(beijing(2026, 7, 13, 12)), false)
 check('周一07点为谷', isPeakBeijing(beijing(2026, 7, 13, 7)), false)
 check('周一14点为峰', isPeakBeijing(beijing(2026, 7, 13, 14)), true)
-check('周一18点为谷(18整点不在内)', isPeakBeijing(beijing(2026, 7, 13, 18)), false)
+check('周一18点为谷，18整点不在内', isPeakBeijing(beijing(2026, 7, 13, 18)), false)
 check('周六全天谷', isPeakBeijing(beijing(2026, 7, 18, 9)), false) // 2026-07-18 是周六
 check('周日全天谷', isPeakBeijing(beijing(2026, 7, 19, 14)), false) // 2026-07-19 是周日
 
@@ -34,9 +34,9 @@ check('覆写窗口后周末也峰', isPeakBeijing(beijing(2026, 7, 19, 14), alw
 check('只关周末谷但days仍工作日，周末仍非峰', isPeakBeijing(beijing(2026, 7, 19, 14), { ...DEFAULT_PEAK, weekendOffPeak: false }), false)
 
 // —— 官方判定 ——
-check('deepseek 非官方(不按前缀)', isOfficial('deepseek'), false)
+check('deepseek 非官方，不按前缀', isOfficial('deepseek'), false)
 check('deepseek-official 是官方', isOfficial('deepseek-official'), true)
-check('opencode-go 非官方(默认)', isOfficial('opencode-go'), false)
+check('opencode-go 非官方，默认', isOfficial('opencode-go'), false)
 check('显式名单精确匹配', isOfficial('custom-official', ['custom-official']), true)
 check('显式名单不匹配', isOfficial('opencode-go', ['custom-official']), false)
 
