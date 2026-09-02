@@ -4,7 +4,7 @@
 
 ## 仓库结构
 
-- `lib/` —— 插件产物，也是源码，无构建步骤。`lib/index.js` 是 host 半身，`lib/client.js` 是 browser 半身，改完即用，**不要引入构建链**。
+- `lib/` —— 插件产物，也是源码，无构建步骤。`lib/index.js` 是 host 半身，改完即用，**不要引入构建链**。
 - `scripts/` —— `smoke.mjs` 冒烟测试，对 `lib/index.js` 导出的纯函数跑断言。
 - `docs/` —— README 引用的效果图资源。
 - `.github/workflows/` —— GitHub Actions，包含 `ci.yml` 与 `release.yml`。
@@ -18,7 +18,7 @@
 本地通过才算通过，CI 用同一套检查：
 
 ```bash
-node --check lib/index.js && node --check lib/client.js   # 语法校验
+node --check lib/index.js   # 语法校验
 node scripts/smoke.mjs                                     # 冒烟测试
 ```
 
@@ -27,8 +27,7 @@ node scripts/smoke.mjs                                     # 冒烟测试
 ### 编码约定
 
 - 注释默认中文，禁止在句中手动硬换行，避免引入破坏一致性的格式化工具。
-- 本插件是双半身 host+client：host 负责真实拦截与路由切换，client 只做配置 UI 骨架。
-- 配置骨架当前不写回 host，正式生效待接线后端，改动时勿假装已生效。
+- 本插件是 host 单半身：拦截与路由切换全在 host，设置一律经 cordis 配置文件注入，不提供界面配置 UI。
 
 ## 分支与提交
 
