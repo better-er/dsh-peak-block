@@ -36,12 +36,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
 
-      # 纯 JS 插件无需 npm install，直接对两个产物源做 ESM 语法校验。
+      # 纯 JS 插件无需 npm install，直接对产物源做 ESM 语法校验。
       - name: 语法检查 lib/*.js
         run: |
           node --check lib/index.js
-          node --check lib/client.js
-          echo "lib/index.js 与 lib/client.js 语法均通过"
+          echo "lib/index.js 语法通过"
 
       # 冒烟测试：直接对 lib/index.js 导出的纯函数跑四象限断言。
       - name: 冒烟测试
@@ -53,7 +52,6 @@ jobs:
       - name: 产物齐全性校验
         run: |
           test -f lib/index.js
-          test -f lib/client.js
           test -f cordis.patch.yml
           test -f package.json
-          echo "发布产物齐全：lib/index.js · lib/client.js · cordis.patch.yml · package.json"
+          echo "发布产物齐全：lib/index.js · cordis.patch.yml · package.json"

@@ -58,8 +58,8 @@ plugins:
 
 ## 要求与开发
 
-- 是**标准形态的 dsh 主机加客户端双半身插件**：host 在 `agent/request` waterfall 里拦截并切换/阻止，`./client` 在设置面板提供一个独立的「梁文峰拦截」标签页，内含 enabled、targetProvider、officialProviders、peakWindow 与预留转 API 端口的配置骨架。当前配置骨架不写回 host，正式生效待接线。
-- 无构建：`lib/index.js` 与 `lib/client.js` 均为源码即产物，改完即用。
+- 是**标准形态的 dsh host 单半身插件**：host 在 `agent/request` waterfall 里拦截并切换/阻止，设置全部经 cordis 配置文件注入，见上方配置表，不提供界面配置 UI。
+- 无构建：`lib/index.js` 为源码即产物，改完即用。
 - 纯函数 `isPeakBeijing` / `isOfficial` / `decide` 在 `lib/index.js` 导出，冒烟测试：
 
   ```powershell
