@@ -70,7 +70,6 @@ jobs:
         with:
           # registry-url 告知 npm 向哪个 registry 换 Trusted Publishing 临时凭证。
           node-version: 24
-          cache: npm
           registry-url: https://registry.npmjs.org
 
       # 纯 JS 零依赖插件，无需 npm install；直接对产物源做 ESM 语法校验。
