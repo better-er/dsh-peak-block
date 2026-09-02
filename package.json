@@ -1,6 +1,6 @@
 {
   "name": "dsh-peak-block",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "梁文峰时间拦截官方 DeepSeek API 请求：北京时间工作日高峰时段 09:00-12:00、14:00-18:00 自动拦截发往官方 provider `deepseek-official` 的模型请求，可切换到第三方中转或预留的本机转 API 端口，未配置则阻止并提示；非高峰不拦、正常走官方，专治高峰掉速与刷屏。标准可安装 dsh 插件，host 单半身，设置经 cordis 配置文件注入。",
   "keywords": [
     "deepseek-harness",
