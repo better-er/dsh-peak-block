@@ -10,6 +10,12 @@
 
 ![拦截效果](docs/拦截效果.webp)
 
+## 演示视频
+
+| 禁止梁文峰演示 · 24 秒 |
+| :---: |
+| [![禁止梁文峰演示](https://i1.hdslb.com/bfs/archive/2d7698c26fe79cd2438019521a5a099d75ad5d04.jpg)](https://www.bilibili.com/video/BV1zvth6oEFp/) |
+
 ## 安装
 
 ```powershell
