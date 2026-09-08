@@ -1,11 +1,9 @@
 name: Release
 
-# 推送形如 vX.Y.Z，如 v0.1.0，的 tag 时自动发版：
-#   凭 tag 号更新 package.json 版本并提交回 main → 语法/冒烟/产物校验
-#   → 发布 npm → 生成 GitHub Release draft。人只需打一个 tag，其余自动衔接。
-# 注意：npm 发布依赖 npmjs 侧开启的 Trusted Publishing
-# npmjs.com → 本包 → Enable trusted publishing → 绑本仓库 GitHub Actions，
-# 无需配置 NPM_TOKEN；未开启时发布步骤会失败。
+# 推送形如 vX.Y.Z 如 v0.2.0 的 tag 时自动发版：
+#   凭 tag 号更新 package.json 版本并提交回 main → 类型检查与单测 → 构建 → 发布 npm
+#   → 生成 GitHub Release draft。人只需打一个 tag，其余自动衔接。
+# 注意：npm 发布走 Trusted Publishing，无需 NPM_TOKEN；未在 npm 侧绑定信任关系时发布会失败。
 on:
   push:
     tags:
@@ -26,8 +24,7 @@ jobs:
       id-token: write
     # fork 永不触发 tag 发布，仅作为兜底防护。
     if: startsWith(github.ref, 'refs/tags/v')
-    # 绑定 GitHub Actions environment「release」，使 OIDC subject 稳定为
-    # environment:release，npm 侧 Trusted Publisher 需填相同 Environment 名。
+    # 绑定 GitHub Actions environment「release」，使 OIDC subject 稳定为 environment:release，npm 侧 Trusted Publisher 需填相同 Environment 名。
     environment: release
     steps:
       - name: Checkout
@@ -38,11 +35,29 @@ jobs:
           # 默认 GITHUB_TOKEN 在分支保护下会被拒，此处显式传 token。
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      # 版本号仅凭 tag 号决定，写入 package.json 并提交回 main。
-      - name: Sync version to main
+      # 前置守卫：仅当该 tag 版本尚未发布到 npm 时才继续发版。
+      # 补历史 tag 时对应版本早已在 npm 上，重复 publish 会报错，且版本回写会把 main 改回旧号；
+      # 故已发布则跳过后续所有步骤。npm view 只读 registry，无需凭证。
+      - name: Skip when tag version already published
+        id: published
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME#v}"          # 去 v 前缀得版本号，如 0.1.0
+          PKG="dsh-peak-block"
+          TAG="${GITHUB_REF_NAME#v}"
+          if npm view "$PKG@$TAG" version >/dev/null 2>&1; then
+            echo "已存在 $PKG@$TAG，跳过发布"
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "未发布 $PKG@$TAG，继续"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # 版本号仅凭 tag 号决定，写入 package.json 并提交回 main。
+      - name: Sync version to main
+        if: steps.published.outputs.published != 'true'
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME#v}"          # 去 v 前缀得版本号，如 0.2.0
           echo "target version = $TAG"
 
           # 切到 main 分支再改版本，避免在 detached tag 上提交。
@@ -50,7 +65,7 @@ jobs:
           git config user.name  github-actions[bot]
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          # 用临时文件改写 version 字段，保留其余内容不变。
+          # 用 node 改写 version 字段，保留其余内容不变。
           node -e "
             const fs = require('fs');
             const p = require('./package.json');
@@ -65,38 +80,46 @@ jobs:
             git push origin main
           }
 
+      - name: Setup pnpm
+        if: steps.published.outputs.published != 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          # 版本必须与 package.json 的 packageManager 完全一致，否则 action-setup 会报 Multiple versions of pnpm specified。
+          version: 9.15.9
+
+      # setup-node 的 registry-url 告知 npm 向哪个 registry 换 Trusted Publishing 临时凭证。
+      # node-version 必须大于等于 24，捆绑的 npm 才大于等于 11.5.1，这是 npm 官方 Trusted Publishing 硬性要求。
       - name: Setup Node
+        if: steps.published.outputs.published != 'true'
         uses: actions/setup-node@v4
         with:
-          # registry-url 告知 npm 向哪个 registry 换 Trusted Publishing 临时凭证。
           node-version: 24
+          cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # 纯 JS 零依赖插件，无需 npm install；直接对产物源做 ESM 语法校验。
-      - name: 语法校验 lib/*.js
-        run: |
-          node --check lib/index.js
-          echo "lib/index.js 语法通过"
+      - name: Install dependencies
+        if: steps.published.outputs.published != 'true'
+        run: pnpm install --frozen-lockfile
 
-      - name: 冒烟测试
-        run: |
-          node scripts/smoke.mjs
-          echo "冒烟测试通过"
+      - name: Typecheck
+        if: steps.published.outputs.published != 'true'
+        run: pnpm typecheck
 
-      - name: 产物齐全性校验
-        run: |
-          test -f lib/index.js
-          test -f cordis.patch.yml
-          test -f package.json
-          echo "发布产物齐全"
+      - name: Test
+        if: steps.published.outputs.published != 'true'
+        run: pnpm test
 
-      # Trusted Publishing：npm 凭 workflow 的 OIDC 身份直接授权，
-      # 无需 NPM_TOKEN；--provenance 会在 npm 上附构建来源证明。
-      # node-version 24 保证捆绑 npm>=11.5.1，npm CLI 才能做 OIDC 自动换权发布。
+      - name: Build
+        if: steps.published.outputs.published != 'true'
+        run: pnpm build
+
+      # Trusted Publishing：npm 凭 workflow 的 OIDC 身份直接授权，无需 NPM_TOKEN；--provenance 会在 npm 上附构建来源证明。
       - name: Publish to npm
+        if: steps.published.outputs.published != 'true'
         run: npm publish --provenance --access public
 
       - name: Create GitHub Release draft
+        if: steps.published.outputs.published != 'true'
         uses: softprops/action-gh-release@v2
         with:
           draft: true

@@ -1,8 +1,8 @@
 name: CI
 
 # 每次 push 到主分支、以及任何 PR 包括来自 fork 的 PR 都自动跑完整检查。
-# 本插件是纯 JS 无 TypeScript 源码、无构建步骤，lib/*.js 即发布产物。
-# 因此 CI 检查 = 语法检查 + 冒烟测试 + 产物齐全校验，全绿才允许合并。
+# 本插件是 TypeScript 源码加 tsdown 构建，lib/ 是产物且不入库，
+# 因此 CI 检查 = 类型检查 + 单测 + 构建 + 产物齐全校验，全绿才允许合并。
 on:
   push:
     branches:
@@ -12,18 +12,18 @@ on:
     branches:
       - main
 
-# 同一分支/PR 上排队的新提交会取消正在跑的旧任务，避免资源浪费。
+# 同一分支或 PR 上排队的新提交会取消正在跑的旧任务，避免资源浪费。
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   check:
-    name: 语法检查 · 冒烟测试 · 产物校验
+    name: typecheck · test · build
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # 本地与线上主推的运行时；插件零依赖，两个版本都验证一次。
+        # 本地与线上主推的运行时，两个版本都验证一次。
         node:
           - 22
           - 26
@@ -31,27 +31,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          # 版本必须与 package.json 的 packageManager 完全一致，否则 action-setup 会报 Multiple versions of pnpm specified。
+          version: 9.15.9
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: pnpm
 
-      # 纯 JS 插件无需 npm install，直接对产物源做 ESM 语法校验。
-      - name: 语法检查 lib/*.js
-        run: |
-          node --check lib/index.js
-          echo "lib/index.js 语法通过"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      # 冒烟测试：直接对 lib/index.js 导出的纯函数跑四象限断言。
-      - name: 冒烟测试
-        run: |
-          node scripts/smoke.mjs
-          echo "冒烟测试通过"
+      - name: Typecheck
+        run: pnpm typecheck
 
-      # 出厂文件齐全性校验，缺失会在此失败，让 PR 作者一眼看到问题。
-      - name: 产物齐全性校验
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      # 让 PR 作者与评审一眼看到构建产物是否齐全，产物缺失会在此失败。
+      - name: Verify build outputs
         run: |
           test -f lib/index.js
+          test -f lib/index.d.ts
           test -f cordis.patch.yml
           test -f package.json
-          echo "发布产物齐全：lib/index.js · cordis.patch.yml · package.json"
+          echo "构建产物齐全：lib/index.js · lib/index.d.ts · cordis.patch.yml · package.json"

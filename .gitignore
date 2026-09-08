@@ -1,8 +1,11 @@
-# 依赖与构建产物，本插件零依赖、无构建，仍预留
+# 依赖与构建产物，lib/ 由 pnpm build 生成，不入库
 node_modules/
+lib/
 
-# 构建缓存与编辑器/系统杂项
+# 构建缓存
 *.tsbuildinfo
+
+# 编辑器/系统杂项
 .DS_Store
 Thumbs.db
 

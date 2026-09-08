@@ -18,11 +18,19 @@
 
 ## 安装
 
+**从 GitHub 安装**：源码在 `src/`，`lib/` 不入仓库，安装时 npm 会触发 `prepare` 脚本现场构建。
+
 ```powershell
 dsh plugin --profile web add github:better-er/dsh-peak-block
 ```
 
-一条命令装完即生效，自动挂载，重启 DSH web 后启用，无需手工编辑任何文件。
+**从 npm 安装**：包内已含构建产物 `lib/index.js`，安装时不再构建。
+
+```powershell
+dsh plugin --profile web add dsh-peak-block
+```
+
+两种方式装完都会自动挂载，重启 DSH web 后启用，无需手工编辑任何文件。
 
 ## 卸载
 
@@ -65,12 +73,16 @@ plugins:
 ## 要求与开发
 
 - 是**标准形态的 dsh host 单半身插件**：host 在 `agent/request` waterfall 里拦截并切换/阻止，设置全部经 cordis 配置文件注入，见上方配置表，不提供界面配置 UI。
-- 无构建：`lib/index.js` 为源码即产物，改完即用。
-- 纯函数 `isPeakBeijing` / `isOfficial` / `decide` 在 `lib/index.js` 导出，冒烟测试：
+- TypeScript 源码在 `src/index.ts`，由 tsdown 构建到 `lib/`；`lib/` 是产物不入库，改完要重新构建：
 
   ```powershell
-  node scripts/smoke.mjs
+  pnpm install
+  pnpm build        # 构建 lib/index.js 与 lib/index.d.ts
+  pnpm typecheck    # 严格类型检查
+  pnpm test         # vitest 单测，覆盖峰谷判定与拦截决策
   ```
+
+- 纯函数 `isPeakBeijing` / `isOfficial` / `decide` 从包入口导出，单测见 `tests/index.spec.ts`。
 
 ## License
 
