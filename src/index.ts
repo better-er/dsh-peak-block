@@ -1,7 +1,7 @@
 /**
  * dsh-peak-block host 端：梁文峰时间拦截向 DeepSeek 官方 API 的模型请求。
  *
- * 在「梁文峰时间」，即 DeepSeek 官方高峰时段——北京时间工作日 09:00–12:00、14:00–18:00、周末全天谷价——拦截原本发往官方 provider 的对话请求。
+ * 在「梁文峰时间」，即 DeepSeek 官方高峰时段——北京时间工作日 09:00–12:00、14:00–18:00，周末与中国法定节假日全天谷价——拦截原本发往官方 provider 的对话请求。
  * 已配置 targetProvider 则切换路由，未配置则阻止并抛出带文案的错误提示。非高峰时段不拦截，正常走官方。
  *
  * 拦截 seam：agent/request waterfall。它对每次对话模型请求携带冻结的调用配置种子 LlmCallConfig，含 provider/model/reasoningEffort/temperature/maxTokens/stop。
@@ -25,7 +25,7 @@ export interface PeakWindow {
   weekendOffPeak: boolean
 }
 
-/** 梁文峰时间默认窗口：工作日 09:00–12:00、14:00–18:00，UTC+8，周末全天谷。 */
+/** 梁文峰时间默认窗口：工作日 09:00–12:00、14:00–18:00，UTC+8，周末与中国法定节假日全天谷。 */
 export const DEFAULT_PEAK: PeakWindow = {
   days: [1, 2, 3, 4, 5],
   hourRanges: [[9, 12], [14, 18]],
@@ -88,14 +88,42 @@ export function defaultIsOfficial(provider: string | undefined): boolean {
 }
 
 /**
+ * 中国法定节假日放假日名单，北京时间 YYYY-MM-DD。2026 年国务院放假安排共 33 天，取自 github.com/NateScarlet/holiday-cn。
+ * 只收放假日，不收调休补班的周末——周末本就全天谷价，补班与否不影响判定。
+ * 只内置 2026 年；新年度安排公布后在此补日期。表外年份退化为只认周末，与未加节假日前的行为一致。
+ */
+const HOLIDAYS_2026: ReadonlySet<string> = new Set([
+  // 元旦
+  '2026-01-01', '2026-01-02', '2026-01-03',
+  // 春节
+  '2026-02-15', '2026-02-16', '2026-02-17', '2026-02-18', '2026-02-19',
+  '2026-02-20', '2026-02-21', '2026-02-22', '2026-02-23',
+  // 清明
+  '2026-04-04', '2026-04-05', '2026-04-06',
+  // 劳动节
+  '2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05',
+  // 端午
+  '2026-06-19', '2026-06-20', '2026-06-21',
+  // 中秋
+  '2026-09-25', '2026-09-26', '2026-09-27',
+  // 国庆
+  '2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04', '2026-10-05',
+  '2026-10-06', '2026-10-07',
+])
+
+/**
  * 时刻是否处于梁文峰时间。纯 UTC+8 数学换算，与系统时区无关，本机时钟/时区不可信。
- * 红线：周末全天谷价，仅工作日有峰。
+ * 红线：周末与中国法定节假日全天谷价，仅工作日有峰。
  */
 export function isPeakBeijing(timeMs: number, peak: Partial<PeakWindow> = DEFAULT_PEAK): boolean {
   const shifted = timeMs + 8 * 3600 * 1000
   const d = new Date(shifted)
   const day = d.getUTCDay()
   if (peak.weekendOffPeak !== false && (day === 0 || day === 6)) return false
+  // 用 getUTC* 拼北京日历日，不用 toISOString：无效时间戳上后者抛 RangeError，getUTC* 只会拼出不命中的串
+  const month = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const dayOfMonth = String(d.getUTCDate()).padStart(2, '0')
+  if (HOLIDAYS_2026.has(`${d.getUTCFullYear()}-${month}-${dayOfMonth}`)) return false
   const days = peak.days
   if (Array.isArray(days) && days.length > 0 && !days.includes(day)) return false
   const hour = d.getUTCHours()

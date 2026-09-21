@@ -36,6 +36,27 @@ describe('isPeakBeijing', () => {
   it('周日全天谷', () => {
     expect(isPeakBeijing(beijing(2026, 7, 19, 14))).toBe(false)
   })
+  it('元旦当天周四全天谷', () => {
+    expect(isPeakBeijing(beijing(2026, 1, 1, 10))).toBe(false)
+  })
+  it('春节假期内周二全天谷', () => {
+    expect(isPeakBeijing(beijing(2026, 2, 17, 10))).toBe(false)
+  })
+  it('国庆假期内周四全天谷', () => {
+    expect(isPeakBeijing(beijing(2026, 10, 1, 10))).toBe(false)
+  })
+  it('春节假期结束后的周二恢复为峰', () => {
+    expect(isPeakBeijing(beijing(2026, 2, 24, 10))).toBe(true)
+  })
+  it('调休补班的周六仍全天谷', () => {
+    expect(isPeakBeijing(beijing(2026, 2, 14, 10))).toBe(false)
+  })
+  it('无效时间戳按谷处理且不抛', () => {
+    expect(isPeakBeijing(NaN)).toBe(false)
+    expect(isPeakBeijing(Infinity)).toBe(false)
+    expect(isPeakBeijing(-Infinity)).toBe(false)
+    expect(isPeakBeijing(8.7e15)).toBe(false)
+  })
 
   const alwaysPeak = { days: [0, 1, 2, 3, 4, 5, 6], hourRanges: [[0, 24]] as Array<[number, number]>, weekendOffPeak: false }
   it('覆写窗口后周末也峰', () => {
@@ -81,6 +102,10 @@ describe('decide', () => {
   })
   it('谷时 + 官方 → pass', () => {
     expect(decide(seedOfficial, atOff).action).toBe('pass')
+  })
+  it('法定节假日 + 官方 → pass', () => {
+    const atHoliday = { timeMs: beijing(2026, 10, 1, 10), peakWindow: DEFAULT_PEAK }
+    expect(decide(seedOfficial, atHoliday).action).toBe('pass')
   })
   it('switch 后 provider 为目标', () => {
     const decision = decide(seedOfficial, { ...atPeak, targetProvider: 'opencode-go' })
