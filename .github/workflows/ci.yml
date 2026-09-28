@@ -1,8 +1,8 @@
 name: CI
 
-# 每次 push 到主分支、以及任何 PR 包括来自 fork 的 PR 都自动跑完整检查。
-# 本插件是 TypeScript 源码加 tsdown 构建，lib/ 是产物且不入库，
-# 因此 CI 检查 = 类型检查 + 单测 + 构建 + 产物齐全校验，全绿才允许合并。
+# 每次 push 到主分支、任何 PR 包括来自 fork 的 PR 都自动跑完整检查。
+# 本插件是构建型：src/ 是源码，lib/ 是产物且不入库，因此 CI 必须装依赖再构建。
+# PR 检查即门禁：typecheck / test / build / 产物校验全绿才允许合并。
 on:
   push:
     branches:
@@ -21,12 +21,6 @@ jobs:
   check:
     name: typecheck · test · build
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # 本地与线上主推的运行时，两个版本都验证一次。
-        node:
-          - 22
-          - 26
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -40,7 +34,8 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node }}
+          # 与本地 node -v 锁死同一版本，见工作区 AGENTS.md 的 Node 版本约定。
+          node-version: 26.3.1
           cache: pnpm
 
       - name: Install dependencies
@@ -55,11 +50,10 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # 让 PR 作者与评审一眼看到构建产物是否齐全，产物缺失会在此失败。
+      # 纯 host 半身且产出 dts，产物缺失会在此失败。
       - name: Verify build outputs
         run: |
           test -f lib/index.js
           test -f lib/index.d.ts
           test -f cordis.patch.yml
-          test -f package.json
-          echo "构建产物齐全：lib/index.js · lib/index.d.ts · cordis.patch.yml · package.json"
+          echo "构建产物齐全：lib/index.js · lib/index.d.ts · cordis.patch.yml"
