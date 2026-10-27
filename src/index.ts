@@ -47,7 +47,7 @@ export interface CallSeed {
 export interface Config {
   /** 总开关，显式 false 才关闭，缺省启用。 */
   enabled?: boolean
-  /** 视为「官方」的 provider 精确名单，不设则用默认判定，即只认 deepseek-official。 */
+  /** 视为「官方」的 provider 精确名单，不设则用默认判定，即认 deepseek-official 与 deepseek-account。 */
   officialProviders?: string[]
   /** 拦截后切到的目标 provider，留空即阻止并提示。 */
   targetProvider?: string
@@ -67,7 +67,7 @@ export interface DecideOptions {
   timeMs: number
   /** 峰谷窗口，缺省用 DEFAULT_PEAK。 */
   peakWindow?: Partial<PeakWindow>
-  /** 官方 provider 精确名单，缺省只认 deepseek-official。 */
+  /** 官方 provider 精确名单，缺省认 deepseek-official 与 deepseek-account。 */
   officialProviders?: string[]
   /** 拦截后切到的目标 provider。 */
   targetProvider?: string
@@ -81,10 +81,17 @@ export interface HostContext {
   ): void
 }
 
-/** 默认官方 provider 判定：只精确匹配 DSH 官方注册路由 deepseek-official。
+/** 视为官方的 provider 默认名单：deepseek-official 是 API 直连通道，deepseek-account 是账号登录通道。
+ * DSH 0.2 起实际会话默认走 deepseek-account，只认前者会让插件永远放行。
  * 不用名称前缀规则——pi-ai 自带的第三方 deepseek 中转不应算官方，避免误拦。 */
+export const DEFAULT_OFFICIAL_PROVIDERS: ReadonlySet<string> = new Set([
+  'deepseek-official',
+  'deepseek-account',
+])
+
+/** 默认官方 provider 判定：精确匹配默认名单里的官方路由。 */
 export function defaultIsOfficial(provider: string | undefined): boolean {
-  return provider === 'deepseek-official'
+  return provider !== undefined && DEFAULT_OFFICIAL_PROVIDERS.has(provider)
 }
 
 /**
@@ -133,7 +140,7 @@ export function isPeakBeijing(timeMs: number, peak: Partial<PeakWindow> = DEFAUL
   return false
 }
 
-/** provider 是否视为官方。显式名单用精确匹配；未提供名单用默认判定，即仅 deepseek-official。 */
+/** provider 是否视为官方。显式名单用精确匹配；未提供名单用默认判定，见 DEFAULT_OFFICIAL_PROVIDERS。 */
 export function isOfficial(provider: string | undefined, officialProviders?: string[]): boolean {
   if (!provider) return false
   if (Array.isArray(officialProviders)) {

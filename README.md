@@ -2,7 +2,7 @@
 
 在 DeepSeek 官方高峰时段拦截官方 provider 请求，保障安心使用梁文谷。
 
-高峰时段默认北京时间工作日 09:00–12:00、14:00–18:00，周末与中国法定节假日全天谷价。拦截到官方请求时：已配置 `targetProvider` 则切到该目标，未配置则阻止并提示；非高峰不拦截，正常走官方。官方判定默认只精确匹配 `deepseek-official`，不做名称前缀规则，因此 pi-ai 自带的三方 `deepseek` 中转不会误拦。
+高峰时段默认北京时间工作日 09:00–12:00、14:00–18:00，周末与中国法定节假日全天谷价。拦截到官方请求时：已配置 `targetProvider` 则切到该目标，未配置则阻止并提示；非高峰不拦截，正常走官方。官方判定默认精确匹配 `deepseek-official` 与 `deepseek-account` 两个官方路由，不做名称前缀规则，因此 pi-ai 自带的三方 `deepseek` 中转不会误拦。DSH 0.2 起实际会话默认走 `deepseek-account`，只认前者会让插件永远放行。
 
 ## 效果
 
@@ -47,7 +47,7 @@ dsh plugin --profile web remove dsh-peak-block
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | 总开关 |
-| `officialProviders` | 未设，只认 `deepseek-official` | 视为「官方」的 provider 精确名单，不设用默认判定 |
+| `officialProviders` | 未设，认 `deepseek-official` 与 `deepseek-account` | 视为「官方」的 provider 精确名单，不设用默认判定 |
 | `targetProvider` | 空 | 拦截后切到的目标 provider；留空 = 阻止并提示 |
 | `peakWindow` | 工作日 9–12、14–18，周末与法定节假日谷 | 峰谷时段窗口，可整体或局部覆盖 |
 
