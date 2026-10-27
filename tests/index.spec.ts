@@ -74,6 +74,12 @@ describe('isOfficial', () => {
   it('deepseek-official 是官方', () => {
     expect(isOfficial('deepseek-official')).toBe(true)
   })
+  it('deepseek-account 也是官方，DSH 0.2 实际会话走这条', () => {
+    expect(isOfficial('deepseek-account')).toBe(true)
+  })
+  it('显式名单给了就只认名单里的，不再默认认 account', () => {
+    expect(isOfficial('deepseek-account', ['deepseek-official'])).toBe(false)
+  })
   it('opencode-go 非官方，默认', () => {
     expect(isOfficial('opencode-go')).toBe(false)
   })
