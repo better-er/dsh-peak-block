@@ -17,7 +17,7 @@ export interface RestoreEntry {
   readonly at: number
 }
 
-/** 待取回条目的有效期，超过即丢弃，避免页面重载后恢复很久以前的消息。 */
+/** 主机内存中待取回条目的有效期，从拦截时刻起算，超过即丢弃，避免页面重载后恢复很久以前的消息。 */
 export const PENDING_TTL_MS = 10 * 60 * 1000
 
 /** 与 dsh 用户消息结构对齐的最小面，只读文字块。 */
