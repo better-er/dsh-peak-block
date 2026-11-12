@@ -112,14 +112,15 @@ jobs:
         if: steps.published.outputs.published != 'true'
         run: pnpm build
 
-      # 纯 host 半身且产出 dts，产物缺失会在此失败。
+      # 含 client 半身且产出 dts，产物缺失会在此失败。
       - name: Verify build outputs
         if: steps.published.outputs.published != 'true'
         run: |
           test -f lib/index.js
+          test -f lib/client.js
           test -f lib/index.d.ts
           test -f cordis.patch.yml
-          echo "构建产物齐全：lib/index.js · lib/index.d.ts · cordis.patch.yml"
+          echo "构建产物齐全：lib/index.js · lib/client.js · lib/index.d.ts · cordis.patch.yml"
 
       # Trusted Publishing：npm 凭 workflow 的 OIDC 身份直接授权，无需 NPM_TOKEN；--provenance 会在 npm 上附构建来源证明。
       - name: Publish to npm

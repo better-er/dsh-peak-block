@@ -50,10 +50,11 @@ jobs:
       - name: Build
         run: pnpm build
 
-      # 纯 host 半身且产出 dts，产物缺失会在此失败。
+      # 含 client 半身且产出 dts，产物缺失会在此失败。
       - name: Verify build outputs
         run: |
           test -f lib/index.js
+          test -f lib/client.js
           test -f lib/index.d.ts
           test -f cordis.patch.yml
-          echo "构建产物齐全：lib/index.js · lib/index.d.ts · cordis.patch.yml"
+          echo "构建产物齐全：lib/index.js · lib/client.js · lib/index.d.ts · cordis.patch.yml"

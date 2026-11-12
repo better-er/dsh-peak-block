@@ -7,12 +7,19 @@
  * 拦截 seam：agent/request waterfall。它对每次对话模型请求携带冻结的调用配置种子 LlmCallConfig，含 provider/model/reasoningEffort/temperature/maxTokens/stop。
  * listener 可返回替代 config 切换 provider。要判断请求是否官方必须先调用 next 拿到 config，故实现为「先取 config 再决策」：切换时返回替代 config，阻止时抛带提示文案的错误。
  * compaction 等走 ctx.llm.stream 直接调用的路径不经此 waterfall，本插件不拦。
+ *
+ * 阻止时这条用户消息已被 inbox 认领、还没写入会话，轮次一失败就永远丢失。
+ * 因此同时监听 agent/pre-step 记下本步的用户消息文字，阻止时转成待取回条目；
+ * 浏览器半身轮询 /dsh-peak-block 通道取回，放回输入框，谷时直接重发。
  */
+
+import { mountRpcChannel, type RpcChannelHandler, type RpcChannelResult } from './rpc-channel.ts'
+import { extractUserText, RestoreQueue, type MessageLike } from './restore.ts'
 
 /** 插件名，与 cordis.patch.yml 的 name 一致。 */
 export const name = 'dsh-peak-block'
 
-/** 纯 host 半身，无额外服务注入。 */
+/** 没有必须先就绪的 host 服务；RPC 通道在 webServer 可用时自行挂载。 */
 export const inject: string[] = []
 
 /** 峰谷时段窗口。 */
@@ -73,12 +80,35 @@ export interface DecideOptions {
   targetProvider?: string
 }
 
-/** host 上下文里本插件用到的最小接口，只需注册 agent/request waterfall。 */
+/** agent/request 的载荷：带会话 id 的 agent，另含轮次与步骤。 */
+export interface RequestPayload {
+  /** 发起请求的 agent，id 即会话 id。 */
+  readonly agent?: { readonly id?: string }
+  /** 轮次序号。 */
+  readonly turn?: number
+  /** 步骤序号。 */
+  readonly step?: number
+}
+
+/** agent/pre-step 的载荷：带会话 id 的 agent 与本步待认领消息。 */
+export interface PreStepPayload {
+  /** 即将开始的 agent，id 即会话 id。 */
+  readonly agent?: { readonly id?: string }
+  /** 本步从 inbox 认领的消息，普通用户输入在 source.kind 为 user。 */
+  readonly messages?: readonly MessageLike[]
+}
+
+/** host 上下文里本插件用到的最小接口：两个 waterfall，外加注册 RPC 用的 inject。 */
 export interface HostContext {
   on(
     event: 'agent/request',
-    listener: (payload: unknown, next: () => Promise<CallSeed>) => Promise<CallSeed>,
+    listener: (payload: RequestPayload, next: () => Promise<CallSeed>) => Promise<CallSeed>,
   ): void
+  on(
+    event: 'agent/pre-step',
+    listener: (payload: PreStepPayload, next: () => Promise<unknown>) => Promise<unknown>,
+  ): void
+  inject(deps: string[], callback: (scope: unknown) => void): unknown
 }
 
 /** 视为官方的 provider 默认名单：deepseek-official 是 API 直连通道，deepseek-account 是账号登录通道。
@@ -151,7 +181,7 @@ export function isOfficial(provider: string | undefined, officialProviders?: str
 
 /** 阻止时抛出的提示文案，用户可见，随界面失败信息呈现。 */
 export const BLOCK_MESSAGE =
-  '【梁文峰时间拦截 · dsh-peak-block】当前为 DeepSeek 官方高峰时段，且未配置拦截目标 targetProvider，请求已阻止。请为 dsh-peak-block 配置 targetProvider，或将请求留到梁文谷时段再发。'
+  '【梁文峰时间拦截 · dsh-peak-block】当前为 DeepSeek 官方高峰时段，且未配置拦截目标 targetProvider，请求已阻止。被拦截的消息会自动放回输入框，可留到梁文谷时段重发，或为 dsh-peak-block 配置 targetProvider。'
 
 /**
  * 纯拦截决策，可单测：返回 { action: 'pass' | 'switch' | 'block', config? }。
@@ -168,12 +198,71 @@ export function decide(seed: CallSeed | undefined, opts: DecideOptions): Decisio
   return { action: 'block' }
 }
 
+/** RPC 成功信封。 */
+function ok(value: unknown): RpcChannelResult {
+  return { ok: true, value }
+}
+
+/** RPC 失败信封。 */
+function rpcError(message: string): RpcChannelResult {
+  return { ok: false, error: { code: 'internal', message, details: {} } }
+}
+
+/**
+ * 建立浏览器取回通道的端点处理器。
+ * @param restores - 本插件实例的消息暂存队列。
+ * @returns 处理 pending 与 ack 两个端点。
+ */
+export function createRestoreHandler(restores: RestoreQueue): RpcChannelHandler {
+  return async (endpoint, payload) => {
+    try {
+      const body = (payload ?? {}) as { sessionId?: unknown; seq?: unknown }
+      const sessionId = body.sessionId
+      if (typeof sessionId !== 'string' || sessionId === '') return rpcError('缺少 sessionId')
+      switch (endpoint) {
+        case 'pending': {
+          const entry = restores.peek(sessionId, Date.now())
+          return ok(entry === undefined ? { seq: 0, text: null } : { seq: entry.seq, text: entry.text })
+        }
+        case 'ack': {
+          if (typeof body.seq !== 'number') return rpcError('ack 需要 seq:number')
+          restores.ack(sessionId, body.seq)
+          return ok({})
+        }
+        default:
+          return rpcError('未知端点 ' + endpoint)
+      }
+    } catch (error) {
+      return rpcError(error instanceof Error ? error.message : String(error))
+    }
+  }
+}
+
+/**
+ * 注册拦截、消息暂存与浏览器取回通道。
+ * @param ctx - 插件上下文。
+ * @param config - 峰谷窗口、官方名单、目标 provider 等配置。
+ */
 export function apply(ctx: HostContext, config: Config = {}): void {
   if (config.enabled === false) return
   const peakWindow = config.peakWindow
   const officialProviders = config.officialProviders
   const targetProvider = config.targetProvider
-  ctx.on('agent/request', async (_payload, next) => {
+  const restores = new RestoreQueue()
+
+  // 每个 step 先清掉上一步残留的候选，再记本步的用户消息；
+  // 自动续跑的 step 没有用户消息，候选保持为空，拦截时不会误恢复旧内容。
+  ctx.on('agent/pre-step', async (payload, next) => {
+    const sessionId = payload.agent?.id
+    if (sessionId !== undefined) {
+      const text = extractUserText(payload.messages)
+      if (text === '') restores.settle(sessionId)
+      else restores.remember(sessionId, text)
+    }
+    return next()
+  })
+
+  ctx.on('agent/request', async (payload, next) => {
     const seed = await next()
     const decision = decide(seed, {
       timeMs: Date.now(),
@@ -181,8 +270,18 @@ export function apply(ctx: HostContext, config: Config = {}): void {
       officialProviders,
       targetProvider,
     })
-    if (decision.action === 'pass') return seed
+    const sessionId = payload.agent?.id
+    if (decision.action === 'block') {
+      if (sessionId !== undefined) restores.block(sessionId, Date.now())
+      throw new Error(BLOCK_MESSAGE)
+    }
+    if (sessionId !== undefined) restores.settle(sessionId)
     if (decision.action === 'switch') return decision.config
-    throw new Error(BLOCK_MESSAGE)
+    return seed
   })
+
+  mountRpcChannel(ctx, '/dsh-peak-block', createRestoreHandler(restores))
 }
+
+export { extractUserText, mergeRestoredText, PENDING_TTL_MS, RestoreQueue } from './restore.ts'
+export type { MessageLike, RestoreEntry } from './restore.ts'

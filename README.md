@@ -2,11 +2,11 @@
 
 在 DeepSeek 官方高峰时段拦截官方 provider 请求，保障安心使用梁文谷。
 
-高峰时段默认北京时间工作日 09:00–12:00、14:00–18:00，周末与中国法定节假日全天谷价。拦截到官方请求时：已配置 `targetProvider` 则切到该目标，未配置则阻止并提示；非高峰不拦截，正常走官方。官方判定默认精确匹配 `deepseek-official` 与 `deepseek-account` 两个官方路由，不做名称前缀规则，因此 pi-ai 自带的三方 `deepseek` 中转不会误拦。DSH 0.2 起实际会话默认走 `deepseek-account`，只认前者会让插件永远放行。
+高峰时段默认北京时间工作日 09:00–12:00、14:00–18:00，周末与中国法定节假日全天谷价。拦截到官方请求时：已配置 `targetProvider` 则切到该目标，未配置则阻止提示并把这条未发出的消息放回输入框；非高峰不拦截，正常走官方。官方判定默认精确匹配 `deepseek-official` 与 `deepseek-account` 两个官方路由，不做名称前缀规则，因此 pi-ai 自带的三方 `deepseek` 中转不会误拦。DSH 0.2 起实际会话默认走 `deepseek-account`，只认前者会让插件永远放行。
 
 ## 效果
 
-未配置 `targetProvider` 时于高峰时段发起官方请求，请求被阻止，界面呈现「未配置拦截目标」的报错：
+未配置 `targetProvider` 时于高峰时段发起官方请求，请求被阻止，界面呈现「未配置拦截目标」的报错，同时被拦下的消息自动放回输入框，等谷时直接重发即可：
 
 ![拦截效果](docs/拦截效果.webp)
 
@@ -24,7 +24,7 @@
 dsh plugin --profile web add github:better-er/dsh-peak-block
 ```
 
-**从 npm 安装**：包内已含构建产物 `lib/index.js`，安装时不再构建。
+**从 npm 安装**：包内已含构建产物 `lib/index.js` 与 `lib/client.js`，安装时不再构建。
 
 ```powershell
 dsh plugin --profile web add dsh-peak-block
@@ -67,23 +67,27 @@ plugins:
 ## 边界
 
 - 只拦对话模型请求：`agent/request` 覆盖 agent loop 的正常对话；compaction 等走 `ctx.llm.stream` 的路径不拦。
+- 回填只恢复文字：图片与文件附件在拦截时已随提交离开输入框，需要重新选择。
+- 回填只对发消息触发的拦截生效：自动续跑等没有用户消息的请求被拦时，没有内容可回填。
+- 主机侧的待回填内容保留 10 分钟；页面重载后确认过的内容不会重复放回。
+- 输入框已有新内容时，拦截消息放在前面、空行分隔，不覆盖新输入。
 - `targetProvider` 必须是 DSH 已注册适配器路由，否则切换后以 `NO_ADAPTER` 失败。
 - `days` 用 JS `getUTCDay` 序号，1..5 为周一..周五；时区判定纯 UTC+8 数学换算，与系统时区无关。
 - 法定节假日名单内置 2026 年，取自国务院放假安排共 33 天，恒为谷价且不受 `peakWindow` 覆盖；表外年份只按周末判定，新安排公布后随源码更新。
 
 ## 要求与开发
 
-- 是**标准形态的 dsh host 单半身插件**：host 在 `agent/request` waterfall 里拦截并切换/阻止，设置全部经 cordis 配置文件注入，见上方配置表，不提供界面配置 UI。
-- TypeScript 源码在 `src/index.ts`，由 tsdown 构建到 `lib/`；`lib/` 是产物不入库，改完要重新构建：
+- 是**标准形态的 dsh 双半身插件**：host 在 `agent/request` waterfall 里拦截并切换/阻止，同时用 `agent/pre-step` 记下本步的用户消息；浏览器半身在 composer 工具行里轮询插件通道 `/dsh-peak-block`，把被拦消息写回草稿。设置全部经 cordis 配置文件注入，见上方配置表，不提供界面配置 UI。
+- TypeScript 源码在 `src/index.ts`、`src/restore.ts`、`src/rpc-channel.ts` 与 `src/client/index.ts`，由 tsdown 构建到 `lib/`；`lib/` 是产物不入库，改完要重新构建：
 
   ```powershell
   pnpm install
-  pnpm build        # 构建 lib/index.js 与 lib/index.d.ts
+  pnpm build        # 构建 lib/index.js、lib/index.d.ts 与 lib/client.js
   pnpm typecheck    # 严格类型检查
-  pnpm test         # vitest 单测，覆盖峰谷判定与拦截决策
+  pnpm test         # vitest 单测，覆盖峰谷判定、拦截决策与消息暂存
   ```
 
-- 纯函数 `isPeakBeijing` / `isOfficial` / `decide` 从包入口导出，单测见 `tests/index.spec.ts`。
+- 纯函数 `isPeakBeijing` / `isOfficial` / `decide` 与 `RestoreQueue` / `extractUserText` / `mergeRestoredText` 从包入口导出，单测见 `tests/index.spec.ts`、`tests/restore.spec.ts` 与 `tests/apply.spec.ts`。
 
 ## License
 
